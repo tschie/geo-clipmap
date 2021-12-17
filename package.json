@@ -1,0 +1,16 @@
+{
+  "name": "geo-clipmap",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^2.6.4"
+  },
+  "dependencies": {
+    "prettier": "^2.5.0",
+    "three": "^0.134.0"
+  }
+}
