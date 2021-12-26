@@ -1,9 +1,11 @@
-var O=Object.defineProperty;var S=Object.getOwnPropertySymbols;var F=Object.prototype.hasOwnProperty,A=Object.prototype.propertyIsEnumerable;var b=(i,e,t)=>e in i?O(i,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):i[e]=t,u=(i,e)=>{for(var t in e||(e={}))F.call(e,t)&&b(i,t,e[t]);if(S)for(var t of S(e))A.call(e,t)&&b(i,t,e[t]);return i};import{W as q,s as R,A as U,S as k,P as G,F as j,a as T,V as m,M as L,b as _,I as H,c as V,d as B,e as Q,G as Z,C as K,f as Y,Q as $}from "./vendor.4595061c.js";const J=function(){const e=document.createElement("link").relList;if(e&&e.supports&&e.supports("modulepreload"))return;for(const o of document.querySelectorAll('link[rel="modulepreload"]'))s(o);new MutationObserver(o=>{for(const r of o)if(r.type==="childList")for(const p of r.addedNodes)p.tagName==="LINK"&&p.rel==="modulepreload"&&s(p)}).observe(document,{childList:!0,subtree:!0});function t(o){const r={};return o.integrity&&(r.integrity=o.integrity),o.referrerpolicy&&(r.referrerPolicy=o.referrerpolicy),o.crossorigin==="use-credentials"?r.credentials="include":o.crossorigin==="anonymous"?r.credentials="omit":r.credentials="same-origin",r}function s(o){if(o.ep)return;o.ep=!0;const r=t(o);fetch(o.href,r)}};J();const ee=`
+var R=Object.defineProperty;var y=Object.getOwnPropertySymbols;var A=Object.prototype.hasOwnProperty,q=Object.prototype.propertyIsEnumerable;var S=(o,e,i)=>e in o?R(o,e,{enumerable:!0,configurable:!0,writable:!0,value:i}):o[e]=i,p=(o,e)=>{for(var i in e||(e={}))A.call(e,i)&&S(o,i,e[i]);if(y)for(var i of y(e))q.call(e,i)&&S(o,i,e[i]);return o};import{W as T,s as U,A as k,S as G,P as j,F as _,a as H,V as x,M as w,b as V,I as X,R as b,c as Z,d as Q,e as Y,G as B,C as K,f as $,Q as J}from"./vendor.f08891b6.js";const ee=function(){const e=document.createElement("link").relList;if(e&&e.supports&&e.supports("modulepreload"))return;for(const t of document.querySelectorAll('link[rel="modulepreload"]'))z(t);new MutationObserver(t=>{for(const r of t)if(r.type==="childList")for(const v of r.addedNodes)v.tagName==="LINK"&&v.rel==="modulepreload"&&z(v)}).observe(document,{childList:!0,subtree:!0});function i(t){const r={};return t.integrity&&(r.integrity=t.integrity),t.referrerpolicy&&(r.referrerPolicy=t.referrerpolicy),t.crossorigin==="use-credentials"?r.credentials="include":t.crossorigin==="anonymous"?r.credentials="omit":r.credentials="same-origin",r}function z(t){if(t.ep)return;t.ep=!0;const r=i(t);fetch(t.href,r)}};ee();const te=`
 precision mediump float;
 
+varying vec3 vWorldPos;
 varying vec3 vNormal;
 varying float vDiscard;
 
+uniform sampler2D grass;
 uniform vec3 sun;
 
 void main() {
@@ -12,17 +14,22 @@ void main() {
     } else {
         vec3 light = normalize(sun);
         float brightness = max(dot(vNormal, light), 0.4);
-        vec3 diffuse = brightness * vec3(1.0, 1.0, 1.0);
+        vec3 blendAxes = abs(vNormal);
+        vec3 uvSample = vWorldPos / 4.0; // texture fills 4x4 world units
+        vec4 grassX = texture2D(grass, uvSample.yz) * blendAxes.x;
+        vec4 grassY = texture2D(grass, uvSample.xz) * blendAxes.y;
+        vec4 grassZ = texture2D(grass, uvSample.xy) * blendAxes.z;
+        vec4 grassColor = grassX + grassY + grassZ;
+        vec3 diffuse = brightness * normalize(grassColor.xyz);
         gl_FragColor = vec4(diffuse, 1.0);
     }
 }
-`,te=`
+`,oe=`
     precision mediump float;
-
-    attribute vec3 neighborCenterOffset;
 
     varying vec3 vNormal;
     varying float vDiscard;
+    varying vec3 vWorldPos;
 
     uniform float gridSize;
 
@@ -159,27 +166,34 @@ void main() {
             float edge = widthLocal / 2.0;// max x or z of whole geometry in local space
             float cellSizeLocal = widthLocal / gridSize;
 
-            // subtract extra one cell border if it's not needed to fill center offset gaps
-            float rightEdgeX = edge - ((neighborCenterOffset.x / cellSize) * cellSizeLocal + cellSizeLocal);
-            float leftEdgeX = -edge - ((neighborCenterOffset.x / cellSize) * cellSizeLocal - cellSizeLocal);
-            float bottomEdgeX = edge - ((neighborCenterOffset.z / cellSize) * cellSizeLocal + cellSizeLocal);
-            float topEdgeX = -edge - ((neighborCenterOffset.z / cellSize) * cellSizeLocal - cellSizeLocal);
+            vec3 worldPosition = (instanceMatrix * vec4(position, 1.0)).xyz;
+            vec3 center = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
 
-            if (position.x > rightEdgeX || position.x < leftEdgeX || position.z > bottomEdgeX || position.z < topEdgeX) {
+            vec3 centerOffset = center - floor(center / cellSize) * cellSize;
+            worldPosition -= centerOffset;
+            
+            vec3 neighborCenterOffset = center - floor(center / cellSize / 2.0) * cellSize * 2.0;
+            vec3 neighborOffset = neighborCenterOffset - centerOffset;
+
+            // subtract extra one cell border if it's not needed to fill center offset gaps
+            float rightEdge = edge - ((neighborOffset.x / cellSize) * cellSizeLocal + cellSizeLocal);
+            float leftEdge = -edge - ((neighborOffset.x / cellSize) * cellSizeLocal - cellSizeLocal);
+            float bottomEdge = edge - ((neighborOffset.z / cellSize) * cellSizeLocal + cellSizeLocal);
+            float topEdge = -edge - ((neighborOffset.z / cellSize) * cellSizeLocal - cellSizeLocal);
+
+            if (position.x > rightEdge || position.x < leftEdge || position.z > bottomEdge || position.z < topEdge) {
                 // discard extra vertices that aren't needed for gaps
                 vDiscard = 1.0;
             } else {
-                vec3 worldPosition = (instanceMatrix * vec4(position, 1.0)).xyz;
-
                 float h = 0.0;
 
-                if ((position.z == bottomEdgeX || position.z == topEdgeX) && mod(position.x - leftEdgeX, 2.0 * cellSizeLocal) > 0.0) {
+                if ((position.z == bottomEdge || position.z == topEdge) && mod(position.x - leftEdge, 2.0 * cellSizeLocal) > 0.0) {
                     // interpolate height with nextLOD at T-junctions on top and bottom sides
                     vec3 prevWorld = worldPosition - vec3(cellSize, 0.0, 0.0);
                     vec3 nextWorld = worldPosition + vec3(cellSize, 0.0, 0.0);
                     h = mix(height(prevWorld), height(nextWorld), 0.5);
                     vNormal = mix(calcNormal(prevWorld, cellSize), calcNormal(nextWorld, cellSize), 0.5);
-                } else if ((position.x == rightEdgeX || position.x == leftEdgeX) && mod(position.z - topEdgeX, 2.0 * cellSizeLocal) > 0.0) {
+                } else if ((position.x == rightEdge || position.x == leftEdge) && mod(position.z - topEdge, 2.0 * cellSizeLocal) > 0.0) {
                     // interpolate height with nextLOD at T-junctions on left and right sides
                     vec3 prevWorld = worldPosition - vec3(0.0, 0.0, cellSize);
                     vec3 nextWorld = worldPosition + vec3(0.0, 0.0, cellSize);
@@ -192,8 +206,9 @@ void main() {
 
                 // adjust y value with noise height
                 vec3 finalPosition = vec3(worldPosition.x, h, worldPosition.z);
+                vWorldPos = finalPosition;
                 gl_Position = projectionMatrix * viewMatrix * vec4(finalPosition, 1.0);
             }
         }
     }
-`,M=8,c=Math.pow(2,M+1)+2,h=12,n=document.querySelector("canvas"),a=new q({canvas:n});a.setPixelRatio(window.devicePixelRatio);a.outputEncoding=R;a.toneMapping=U;a.toneMappingExposure=.5;const x=new k,l=new G(75,n.offsetWidth/n.offsetHeight,.1,1e6);l.position.set(0,3e3,0);const g=new j(l,a.domElement);g.dragToLook=!0;g.movementSpeed=2e3;g.rollSpeed=1;const f=new T;f.scale.setScalar(45e4);x.add(f);const d={turbidity:{value:10},rayleigh:{value:3},mieCoefficient:{value:.005},mieDirectionalG:{value:.7},elevation:{value:35},azimuth:{value:180},exposure:a.toneMappingExposure},z=new m,oe=L.degToRad(90-d.elevation.value),ie=L.degToRad(d.azimuth.value);z.setFromSphericalCoords(1,oe,ie);d.sunPosition={value:z};f.material.uniforms=u(u({},f.material.uniforms),d);a.toneMappingExposure=d.exposure;const y=new _(c/(c-2),c/(c-2),c,c);y.rotateX(-Math.PI/2);const w=new H(new Float32Array(h*3),3,!1,1);y.setAttribute("neighborCenterOffset",w);const E=new V({uniforms:{gridSize:{value:c},sun:{value:z}},vertexShader:te,fragmentShader:ee}),v=new B(y,E,h);x.add(v);const P=Q();document.body.appendChild(P.domElement);const C=new Z,N={update:!0},I=C.addFolder("Clip Map");I.add(N,"update",!0);I.open();const W=C.addFolder("Material");W.add(E,"wireframe",!1);W.open();const re=new K,X=()=>{if(requestAnimationFrame(X),g.update(re.getDelta()),N.update){const i=l.position;for(let e=0;e<h;e++){const t=Math.pow(2,e),s=Math.pow(2,e+M+1),o=new m(Math.floor(i.x/t)*t,0,Math.floor(i.z/t)*t);v.setMatrixAt(e,new Y().compose(o,new $,new m(s,1,s))),w.setXYZ(e,o.x-Math.floor(i.x/t/2)*t*2,0,o.z-Math.floor(i.z/t/2)*t*2)}w.needsUpdate=!0,v.instanceMatrix.needsUpdate=!0,v.material.needsUpdate=!0}a.render(x,l),P.update()},D=()=>{n.width=n.offsetWidth,n.height=n.offsetHeight,l.aspect=n.offsetWidth/n.offsetHeight,l.updateProjectionMatrix(),a.setSize(window.innerWidth,window.innerHeight)};window.addEventListener("resize",D);D();X();
+`,L=7,l=Math.pow(2,L+1)+2,M=12,a=document.querySelector("canvas"),n=new T({canvas:a});n.setPixelRatio(window.devicePixelRatio);n.outputEncoding=U;n.toneMapping=k;n.toneMappingExposure=.5;const u=new G,c=new j(75,a.offsetWidth/a.offsetHeight,.1,1e6);c.position.set(0,3e3,0);const g=new _(c,n.domElement);g.dragToLook=!0;g.movementSpeed=2e3;g.rollSpeed=1;const d=new H;d.scale.setScalar(45e4);u.add(d);const s={turbidity:{value:10},rayleigh:{value:3},mieCoefficient:{value:.005},mieDirectionalG:{value:.7},elevation:{value:35},azimuth:{value:180},exposure:n.toneMappingExposure},m=new x,ie=w.degToRad(90-s.elevation.value),re=w.degToRad(s.azimuth.value);m.setFromSphericalCoords(1,ie,re);s.sunPosition={value:m};d.material.uniforms=p(p({},d.material.uniforms),s);n.toneMappingExposure=s.exposure;const E=new V(l/(l-2),l/(l-2),l,l);E.rotateX(-Math.PI/2);const h=X.loadTexture("/geo-clipmap/grass.png");h.wrapS=b;h.wrapT=b;const P=new Z({uniforms:{grass:{type:"t",value:h},gridSize:{value:l},sun:{value:m}},vertexShader:oe,fragmentShader:te}),f=new Q(E,P,M);u.add(f);const W=Y();document.body.appendChild(W.domElement);const N=new B,D={update:!0},C=N.addFolder("Clip Map");C.add(D,"update",!0);C.open();const I=N.addFolder("Material");I.add(P,"wireframe",!1);I.open();const O=()=>{a.width=a.offsetWidth,a.height=a.offsetHeight,c.aspect=a.offsetWidth/a.offsetHeight,c.updateProjectionMatrix(),n.setSize(window.innerWidth,window.innerHeight)};window.addEventListener("resize",O);O();const ae=new K,F=()=>{if(requestAnimationFrame(F),g.update(ae.getDelta()),D.update){for(let o=0;o<M;o++){const e=Math.pow(2,o+L+1);f.setMatrixAt(o,new $().compose(new x(Math.floor(c.position.x),0,Math.floor(c.position.z)),new J,new x(e,1,e)))}f.instanceMatrix.needsUpdate=!0,f.material.needsUpdate=!0}n.render(u,c),W.update()};F();

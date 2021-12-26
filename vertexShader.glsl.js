@@ -2,10 +2,9 @@
 export const terrainVertexShader = `
     precision mediump float;
 
-    attribute vec3 neighborCenterOffset;
-
     varying vec3 vNormal;
     varying float vDiscard;
+    varying vec3 vWorldPos;
 
     uniform float gridSize;
 
@@ -142,27 +141,34 @@ export const terrainVertexShader = `
             float edge = widthLocal / 2.0;// max x or z of whole geometry in local space
             float cellSizeLocal = widthLocal / gridSize;
 
-            // subtract extra one cell border if it's not needed to fill center offset gaps
-            float rightEdgeX = edge - ((neighborCenterOffset.x / cellSize) * cellSizeLocal + cellSizeLocal);
-            float leftEdgeX = -edge - ((neighborCenterOffset.x / cellSize) * cellSizeLocal - cellSizeLocal);
-            float bottomEdgeX = edge - ((neighborCenterOffset.z / cellSize) * cellSizeLocal + cellSizeLocal);
-            float topEdgeX = -edge - ((neighborCenterOffset.z / cellSize) * cellSizeLocal - cellSizeLocal);
+            vec3 worldPosition = (instanceMatrix * vec4(position, 1.0)).xyz;
+            vec3 center = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
 
-            if (position.x > rightEdgeX || position.x < leftEdgeX || position.z > bottomEdgeX || position.z < topEdgeX) {
+            vec3 centerOffset = center - floor(center / cellSize) * cellSize;
+            worldPosition -= centerOffset;
+            
+            vec3 neighborCenterOffset = center - floor(center / cellSize / 2.0) * cellSize * 2.0;
+            vec3 neighborOffset = neighborCenterOffset - centerOffset;
+
+            // subtract extra one cell border if it's not needed to fill center offset gaps
+            float rightEdge = edge - ((neighborOffset.x / cellSize) * cellSizeLocal + cellSizeLocal);
+            float leftEdge = -edge - ((neighborOffset.x / cellSize) * cellSizeLocal - cellSizeLocal);
+            float bottomEdge = edge - ((neighborOffset.z / cellSize) * cellSizeLocal + cellSizeLocal);
+            float topEdge = -edge - ((neighborOffset.z / cellSize) * cellSizeLocal - cellSizeLocal);
+
+            if (position.x > rightEdge || position.x < leftEdge || position.z > bottomEdge || position.z < topEdge) {
                 // discard extra vertices that aren't needed for gaps
                 vDiscard = 1.0;
             } else {
-                vec3 worldPosition = (instanceMatrix * vec4(position, 1.0)).xyz;
-
                 float h = 0.0;
 
-                if ((position.z == bottomEdgeX || position.z == topEdgeX) && mod(position.x - leftEdgeX, 2.0 * cellSizeLocal) > 0.0) {
+                if ((position.z == bottomEdge || position.z == topEdge) && mod(position.x - leftEdge, 2.0 * cellSizeLocal) > 0.0) {
                     // interpolate height with nextLOD at T-junctions on top and bottom sides
                     vec3 prevWorld = worldPosition - vec3(cellSize, 0.0, 0.0);
                     vec3 nextWorld = worldPosition + vec3(cellSize, 0.0, 0.0);
                     h = mix(height(prevWorld), height(nextWorld), 0.5);
                     vNormal = mix(calcNormal(prevWorld, cellSize), calcNormal(nextWorld, cellSize), 0.5);
-                } else if ((position.x == rightEdgeX || position.x == leftEdgeX) && mod(position.z - topEdgeX, 2.0 * cellSizeLocal) > 0.0) {
+                } else if ((position.x == rightEdge || position.x == leftEdge) && mod(position.z - topEdge, 2.0 * cellSizeLocal) > 0.0) {
                     // interpolate height with nextLOD at T-junctions on left and right sides
                     vec3 prevWorld = worldPosition - vec3(0.0, 0.0, cellSize);
                     vec3 nextWorld = worldPosition + vec3(0.0, 0.0, cellSize);
@@ -175,6 +181,7 @@ export const terrainVertexShader = `
 
                 // adjust y value with noise height
                 vec3 finalPosition = vec3(worldPosition.x, h, worldPosition.z);
+                vWorldPos = finalPosition;
                 gl_Position = projectionMatrix * viewMatrix * vec4(finalPosition, 1.0);
             }
         }

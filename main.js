@@ -1,34 +1,36 @@
 import {
   ACESFilmicToneMapping,
   Clock,
-  InstancedBufferAttribute,
+  ImageUtils,
   InstancedMesh,
   MathUtils,
   Matrix4,
   PerspectiveCamera,
   PlaneBufferGeometry,
   Quaternion,
+  RepeatWrapping,
   Scene,
   ShaderMaterial,
   sRGBEncoding,
   Vector3,
-  WebGLRenderer
+  WebGLRenderer,
 } from "three";
-import {terrainFragmentShader} from "./fragmentShader.glsl";
-import {terrainVertexShader} from "./vertexShader.glsl";
-import {FlyControls} from "three/examples/jsm/controls/FlyControls";
+import { terrainFragmentShader } from "./fragmentShader.glsl";
+import { terrainVertexShader } from "./vertexShader.glsl";
+import { FlyControls } from "three/examples/jsm/controls/FlyControls";
 import Stats from "three/examples/jsm/libs/stats.module";
-import {GUI} from "three/examples/jsm/libs/dat.gui.module";
-import {Sky} from "three/examples/jsm/objects/Sky";
+import { GUI } from "three/examples/jsm/libs/dat.gui.module";
+import { Sky } from "three/examples/jsm/objects/Sky";
+import grassUrl from "./grass.png";
 
-const MIN_SCALE = 8; // controls size of center LOD and overall resolution (lower for better performance)
+const MIN_SCALE = 7; // controls size of center LOD and overall resolution (lower for better performance)
 const GRID_SIZE = Math.pow(2, MIN_SCALE + 1) + 2;
 const LEVELS = 12;
 
 const canvas = document.querySelector("canvas");
 
 const renderer = new WebGLRenderer({ canvas });
-renderer.setPixelRatio( window.devicePixelRatio );
+renderer.setPixelRatio(window.devicePixelRatio);
 renderer.outputEncoding = sRGBEncoding;
 renderer.toneMapping = ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.5;
@@ -55,25 +57,25 @@ sky.scale.setScalar(450000);
 scene.add(sky);
 
 const skyUniforms = {
-  turbidity: {value: 10},
-  rayleigh: {value: 3},
-  mieCoefficient: {value: 0.005},
-  mieDirectionalG: {value: 0.7},
-  elevation: {value: 35},
-  azimuth: {value: 180},
-  exposure: renderer.toneMappingExposure
+  turbidity: { value: 10 },
+  rayleigh: { value: 3 },
+  mieCoefficient: { value: 0.005 },
+  mieDirectionalG: { value: 0.7 },
+  elevation: { value: 35 },
+  azimuth: { value: 180 },
+  exposure: renderer.toneMappingExposure,
 };
 
 const sun = new Vector3();
 const phi = MathUtils.degToRad(90 - skyUniforms.elevation.value);
 const theta = MathUtils.degToRad(skyUniforms.azimuth.value);
 sun.setFromSphericalCoords(1, phi, theta);
-skyUniforms.sunPosition = {value: sun};
+skyUniforms.sunPosition = { value: sun };
 
 sky.material.uniforms = {
   ...sky.material.uniforms,
-  ...skyUniforms
-}
+  ...skyUniforms,
+};
 
 renderer.toneMappingExposure = skyUniforms.exposure;
 
@@ -87,23 +89,18 @@ const geometry = new PlaneBufferGeometry(
 );
 geometry.rotateX(-Math.PI / 2);
 
-// per instance attribute to track center offset gap with next LOD
-const neighborCenterOffsetInstancedAttribute = new InstancedBufferAttribute(
-  new Float32Array(LEVELS * 3),
-  3,
-  false,
-  1
-);
-
-geometry.setAttribute(
-  "neighborCenterOffset",
-  neighborCenterOffsetInstancedAttribute
-);
+const grassTexture = ImageUtils.loadTexture(grassUrl);
+grassTexture.wrapS = RepeatWrapping;
+grassTexture.wrapT = RepeatWrapping;
 
 const material = new ShaderMaterial({
   uniforms: {
+    grass: {
+      type: "t",
+      value: grassTexture,
+    },
     gridSize: { value: GRID_SIZE },
-    sun: { value: sun }
+    sun: { value: sun },
   },
   vertexShader: terrainVertexShader,
   fragmentShader: terrainFragmentShader,
@@ -150,35 +147,22 @@ const animate = () => {
   controls.update(clock.getDelta());
 
   if (updateControl.update) {
-    const cameraPos = camera.position;
-
     for (let i = 0; i < LEVELS; i++) {
-      const cellSize = Math.pow(2, i);
       const scale = Math.pow(2, i + MIN_SCALE + 1);
-      // snap to nearest vertex on this level's grid
-      const center = new Vector3(
-        Math.floor(cameraPos.x / cellSize) * cellSize,
-        0.0,
-        Math.floor(cameraPos.z / cellSize) * cellSize
-      );
       instancedMesh.setMatrixAt(
         i,
         new Matrix4().compose(
-          center,
+          new Vector3(
+            Math.floor(camera.position.x),
+            0.0,
+            Math.floor(camera.position.z)
+          ),
           new Quaternion(),
           new Vector3(scale, 1, scale)
         )
       );
-      // calculate offset between center and next (larger) LOD's center
-      neighborCenterOffsetInstancedAttribute.setXYZ(
-        i,
-        center.x - Math.floor(cameraPos.x / cellSize / 2.0) * cellSize * 2.0,
-        0.0,
-        center.z - Math.floor(cameraPos.z / cellSize / 2.0) * cellSize * 2.0
-      );
     }
 
-    neighborCenterOffsetInstancedAttribute.needsUpdate = true;
     instancedMesh.instanceMatrix.needsUpdate = true;
     instancedMesh.material.needsUpdate = true;
   }
