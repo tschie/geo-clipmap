@@ -4,6 +4,7 @@ export const terrainVertexShader = `
 
     varying vec3 vNormal;
     varying float vDiscard;
+    varying vec3 vWorldPos;
 
     uniform float gridSize;
 
@@ -180,6 +181,7 @@ export const terrainVertexShader = `
 
                 // adjust y value with noise height
                 vec3 finalPosition = vec3(worldPosition.x, h, worldPosition.z);
+                vWorldPos = finalPosition;
                 gl_Position = projectionMatrix * viewMatrix * vec4(finalPosition, 1.0);
             }
         }

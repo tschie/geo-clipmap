@@ -1,12 +1,14 @@
 import {
   ACESFilmicToneMapping,
   Clock,
+  ImageUtils,
   InstancedMesh,
   MathUtils,
   Matrix4,
   PerspectiveCamera,
   PlaneBufferGeometry,
   Quaternion,
+  RepeatWrapping,
   Scene,
   ShaderMaterial,
   sRGBEncoding,
@@ -19,6 +21,7 @@ import { FlyControls } from "three/examples/jsm/controls/FlyControls";
 import Stats from "three/examples/jsm/libs/stats.module";
 import { GUI } from "three/examples/jsm/libs/dat.gui.module";
 import { Sky } from "three/examples/jsm/objects/Sky";
+import grassUrl from "./grass.png";
 
 const MIN_SCALE = 7; // controls size of center LOD and overall resolution (lower for better performance)
 const GRID_SIZE = Math.pow(2, MIN_SCALE + 1) + 2;
@@ -86,8 +89,16 @@ const geometry = new PlaneBufferGeometry(
 );
 geometry.rotateX(-Math.PI / 2);
 
+const grassTexture = ImageUtils.loadTexture(grassUrl);
+grassTexture.wrapS = RepeatWrapping;
+grassTexture.wrapT = RepeatWrapping;
+
 const material = new ShaderMaterial({
   uniforms: {
+    grass: {
+      type: "t",
+      value: grassTexture,
+    },
     gridSize: { value: GRID_SIZE },
     sun: { value: sun },
   },
